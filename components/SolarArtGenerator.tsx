@@ -1,8 +1,8 @@
+'use client'
 import React, { useEffect, useRef, useState } from 'react'
-import { motion } from 'framer-motion'
 
-/** Minimal UI bits (MUI/shadcn-like look without deps) */
-const Label: React.FC<React.HTMLAttributes<HTMLLabelElement>> = ({ className = '', ...props }) => (
+/** Minimal UI bits */
+const Label: React.FC<React.LabelHTMLAttributes<HTMLLabelElement>> = ({ className = '', ...props }) => (
   <label className={`text-sm text-gray-500 ${className}`} {...props} />
 )
 const Button: React.FC<React.ButtonHTMLAttributes<HTMLButtonElement>> = ({ className = '', ...props }) => (
@@ -69,18 +69,18 @@ const defaultKnobs: Knobs = {
   particleAmp: 1200,
   windMultiplier: 1.0,
   flareAmp: 1.0,
-  style: 'Deck223',           // sand/charcoal posterized (PXL Deck 223 vibe)
-  particleShape: 'square',    // pixelated particles
-  posterize: 6,               // fewer levels = chunkier gradients
-  grain: true,                // subtle film grain overlay
+  style: 'Deck223',
+  particleShape: 'square',
+  posterize: 6,
+  grain: true,
 }
 
 /** Map data → visuals */
 function useVisualParams(sig: SolarSignal, knobs: Knobs) {
   const palettes: Record<string, { baseHue:number; sat:number; bg:number }> = {
-    Deck223:  { baseHue: 38,  sat: 45, bg: knobs.bgLightness }, // amber/sand
-    Solarpunk:{ baseHue: 130, sat: 60, bg: knobs.bgLightness }, // greens
-    Aurora:   { baseHue: 200, sat: 55, bg: knobs.bgLightness }, // indigo/cyan
+    Deck223:  { baseHue: 38,  sat: 45, bg: knobs.bgLightness },
+    Solarpunk:{ baseHue: 130, sat: 60, bg: knobs.bgLightness },
+    Aurora:   { baseHue: 200, sat: 55, bg: knobs.bgLightness },
   }
   const p = palettes[knobs.style] ?? palettes.Deck223
 
@@ -89,7 +89,6 @@ function useVisualParams(sig: SolarSignal, knobs: Knobs) {
   const saturation = p.sat + sig.flareProb * (knobs.style === 'Deck223' ? 10 : 25)
   const lightness = 42 + sig.sunspotArea * 14
 
-  // Posterize HSL channels for 8-bit vibe
   const q = (v:number, levels:number)=> Math.round(v / (100/levels)) * (100/levels)
   const bg = `hsl(${Math.round(hue)}, ${q(saturation*0.8, knobs.posterize)}%, ${q(p.bg, knobs.posterize)}%)`
   const core = `hsl(${Math.round(hue)}, ${q(saturation, knobs.posterize)}%, ${q(lightness, knobs.posterize)}%)`
@@ -108,7 +107,6 @@ function SolarCanvas({ sig, knobs }: { sig: SolarSignal; knobs: Knobs }) {
 
   const { bg, core, particleCount, rotationSpeed, flareBurst, hue } = useVisualParams(sig, knobs)
 
-  // Init & resize
   useEffect(() => {
     const canvas = canvasRef.current!
     const ctx = canvas.getContext('2d')!
@@ -119,12 +117,11 @@ function SolarCanvas({ sig, knobs }: { sig: SolarSignal; knobs: Knobs }) {
       ctx.setTransform(dpr,0,0,dpr,0,0)
     }
     resize()
-    const ro = new ResizeObserver(resize)
+    const ro = new (window as any).ResizeObserver(resize)
     ro.observe(canvas)
     return () => ro.disconnect()
   }, [])
 
-  // Maintain particle population
   useEffect(() => {
     const ps = particlesRef.current
     while (ps.length < particleCount) {
@@ -141,7 +138,7 @@ function SolarCanvas({ sig, knobs }: { sig: SolarSignal; knobs: Knobs }) {
     function noise(ctx: CanvasRenderingContext2D, w:number, h:number) {
       const img = ctx.createImageData(w, h)
       for (let i=0;i<img.data.length;i+=4){
-        const n = Math.random()*30  // subtle
+        const n = Math.random()*30
         img.data[i]=img.data[i+1]=img.data[i+2]=n; img.data[i+3]=20
       }
       ctx.putImageData(img, 0, 0)
@@ -152,14 +149,12 @@ function SolarCanvas({ sig, knobs }: { sig: SolarSignal; knobs: Knobs }) {
       const h = canvas.clientHeight
       ctx.clearRect(0,0,w,h)
 
-      // Background
       const g = ctx.createRadialGradient(w/2, h/2, 0, w/2, h/2, Math.max(w,h)/1.2)
       g.addColorStop(0, bg)
       g.addColorStop(1, `hsl(${hue}, 40%, ${Math.max(6, knobs.bgLightness-20)}%)`)
       ctx.fillStyle = g
       ctx.fillRect(0,0,w,h)
 
-      // Core
       ctx.beginPath()
       const coreR = Math.min(w,h) * 0.16 + sig.sunspotArea * 40
       const coreGradient = ctx.createRadialGradient(w/2, h/2, coreR*0.08, w/2, h/2, coreR)
@@ -169,7 +164,6 @@ function SolarCanvas({ sig, knobs }: { sig: SolarSignal; knobs: Knobs }) {
       ctx.arc(w/2, h/2, coreR, 0, Math.PI*2)
       ctx.fill()
 
-      // Particle corona
       const ps = particlesRef.current
       ctx.save()
       ctx.translate(w/2, h/2)
@@ -190,8 +184,6 @@ function SolarCanvas({ sig, knobs }: { sig: SolarSignal; knobs: Knobs }) {
           ctx.arc(x, y, 1 + sig.sunspotArea*1.2, 0, Math.PI*2)
           ctx.fill()
         }
-
-        // Occasional flare streaks (reduced chance for Deck223 minimalism)
         const streakChance = knobs.style === 'Deck223' ? 0.004 : 0.01
         if (Math.random() < flareBurst * streakChance) {
           ctx.strokeStyle = `hsla(${hue}, 95%, 70%, 0.35)`
@@ -313,15 +305,6 @@ export default function SolarArtGenerator() {
               <KV label="Sunspot Area" value={sig.sunspotArea.toFixed(2)} />
               <KV label="Timestamp" value={new Date(sig.timestamp).toLocaleTimeString()} />
             </div>
-          </Card>
-
-          <Card>
-            <h3 className="text-base font-semibold mb-2">Wire-up Notes</h3>
-            <ul className="list-disc pl-5 text-sm space-y-2 text-gray-600">
-              <li>Preset <code>Deck223</code> mimics sand/charcoal posterized aesthetics.</li>
-              <li>Set <code>particleShape</code> to <code>square</code> for a pixel/voxel vibe.</li>
-              <li>Normalize SuryaBench values to 0..1 in the adapter; visuals react automatically.</li>
-            </ul>
           </Card>
         </div>
       </div>
